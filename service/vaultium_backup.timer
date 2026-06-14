@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Vaultium Backup Periodically
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=24h
+Persistent=true
+Unit=vaultium_backup.service
+
+[Install]
+WantedBy=timers.target

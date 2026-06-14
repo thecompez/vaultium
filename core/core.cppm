@@ -1,0 +1,19 @@
+export module vaultium_core;
+
+export import vaultium_core_types;
+export import vaultium_core_logger;
+export import vaultium_core_sha256;
+export import vaultium_core_backup_config;
+export import vaultium_core_process_runner;
+export import vaultium_core_database_backup_engine;
+export import vaultium_core_mysql_backup_engine;
+export import vaultium_core_postgresql_backup_engine;
+export import vaultium_core_sqlite_backup_engine;
+export import vaultium_core_service_catalog;
+export import vaultium_core_backup_source;
+export import vaultium_core_database_backup_source;
+export import vaultium_core_filesystem_backup_source;
+export import vaultium_core_service_config_backup_source;
+export import vaultium_core_backup_manager;
+export import vaultium_core_inventory;
+export import vaultium_core_scheduler;
