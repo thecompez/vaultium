@@ -123,6 +123,12 @@ if(VAULTIUM_BUILD_TESTS)
     add_executable(vaultium_tests tests/test_main.cpp)
     target_link_libraries(vaultium_tests PRIVATE vaultium_core)
     vaultium_enable_warnings(vaultium_tests)
+    if(NOT MSVC)
+        # Some tests intentionally use partial designated aggregate initialization
+        # to exercise defaults. Keep the diagnostic visible without weakening the
+        # warnings-as-errors policy for production targets.
+        target_compile_options(vaultium_tests PRIVATE -Wno-error=missing-field-initializers)
+    endif()
     add_test(NAME vaultium_tests COMMAND vaultium_tests)
 endif()
 
