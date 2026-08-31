@@ -1,0 +1,15 @@
+# Vaultium filesystem backup example
+BACKUP_ENABLED=true
+BACKUP_SOURCE=filesystem
+EXECUTION_MODE=local
+BACKUP_COMPRESS=true
+BACKUP_VALIDATE_GZIP=true
+BACKUP_CHECKSUM=true
+BACKUP_CLEANUP_ENABLED=true
+BACKUP_PATHS=/etc/nginx,/etc/systemd/system
+BACKUP_DIR=/var/backups/vaultium
+LOCK_FILE=/run/vaultium.lock
+BACKUP_RETENTION_DAYS=14
+BACKUP_INTERVAL_MINUTES=1440
+TAR_PATH=/usr/bin/tar
+GZIP_PATH=/usr/bin/gzip
