@@ -107,6 +107,14 @@ target_compile_definitions(vaultium_core PUBLIC ${VAULTIUM_PLATFORM_DEFINE})
 target_link_libraries(vaultium_core PUBLIC PkgConfig::LIBSSH2)
 vaultium_enable_warnings(vaultium_core)
 
+# systemdAvailable() is deliberately compiled in the shared scheduler source but
+# is only referenced by the Linux backend. Apple Clang diagnoses that one helper
+# as unused; keep the diagnostic non-fatal for this source without weakening the
+# warnings-as-errors policy for the rest of the production target.
+if(APPLE AND VAULTIUM_WARNINGS_AS_ERRORS)
+    set_source_files_properties(core/scheduler.cpp PROPERTIES COMPILE_OPTIONS "-Wno-error=unused-function")
+endif()
+
 add_executable(vaultium main.cpp)
 target_sources(vaultium
     PRIVATE
