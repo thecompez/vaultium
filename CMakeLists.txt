@@ -1,44 +1,60 @@
-cmake_minimum_required(VERSION 4.1)
+cmake_minimum_required(VERSION 3.28)
 
 project(Vaultium
-        VERSION 0.2.0
-        DESCRIPTION "Cross-platform backup manager (database, filesystem, and more)"
-        LANGUAGES CXX
+    VERSION 0.3.0
+    DESCRIPTION "Reliable backup manager for databases, filesystems, and service configuration"
+    LANGUAGES CXX
 )
 
 if(POLICY CMP0155)
     cmake_policy(SET CMP0155 NEW)
 endif()
 
+include(GNUInstallDirs)
+
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+option(VAULTIUM_BUILD_GUI "Build the Vaultium Qt/QML application" OFF)
+option(VAULTIUM_BUILD_TESTS "Build Vaultium tests" ON)
+option(VAULTIUM_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
+option(VAULTIUM_BUILD_UI "Deprecated alias for VAULTIUM_BUILD_GUI" OFF)
+
+if(VAULTIUM_BUILD_UI)
+    message(DEPRECATION "VAULTIUM_BUILD_UI is deprecated; use VAULTIUM_BUILD_GUI.")
+    set(VAULTIUM_BUILD_GUI ON CACHE BOOL "Build the Vaultium Qt/QML application" FORCE)
+endif()
+
+if(APPLE)
+    set(VAULTIUM_PLATFORM_DEFINE VAULTIUM_PLATFORM_MACOS=1)
+elseif(UNIX)
+    set(VAULTIUM_PLATFORM_DEFINE VAULTIUM_PLATFORM_LINUX=1)
+else()
+    message(FATAL_ERROR "Vaultium 0.3 currently supports Linux and macOS. Windows support is not release-ready yet.")
+endif()
+
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBSSH2 REQUIRED IMPORTED_TARGET libssh2)
 
-option(VAULTIUM_BUILD_UI "Build Vaultium Qt UI" OFF)
-option(VAULTIUM_BUILD_TESTS "Build Vaultium tests" ON)
+function(vaultium_enable_warnings target)
+    if(MSVC)
+        target_compile_options(${target} PRIVATE /W4)
+        if(VAULTIUM_WARNINGS_AS_ERRORS)
+            target_compile_options(${target} PRIVATE /WX)
+        endif()
+    else()
+        target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic)
+        if(VAULTIUM_WARNINGS_AS_ERRORS)
+            target_compile_options(${target} PRIVATE -Werror)
+        endif()
+    endif()
+endfunction()
 
-# Per-platform definitions, shared by the library and everything that links it.
-if(UNIX AND NOT APPLE)
-    set(VAULTIUM_PLATFORM_DEFINE VAULTIUM_PLATFORM_LINUX=1)
-elseif(APPLE)
-    set(VAULTIUM_PLATFORM_DEFINE VAULTIUM_PLATFORM_MACOS=1)
-elseif(WIN32)
-    set(VAULTIUM_PLATFORM_DEFINE VAULTIUM_PLATFORM_WINDOWS=1)
-else()
-    set(VAULTIUM_PLATFORM_DEFINE VAULTIUM_PLATFORM_UNKNOWN=1)
-endif()
-
-# ---------------------------------------------------------------------------
-# vaultium_core: UI-independent backup engine. The CLI, the test suite, and a
-# future Qt/QML GUI all link against this and consume its C++ modules.
-# ---------------------------------------------------------------------------
 add_library(vaultium_core STATIC)
 
 target_sources(vaultium_core
-        PRIVATE
+    PRIVATE
         core/logger.cpp
         core/sha256.cpp
         core/service_catalog.cpp
@@ -54,15 +70,12 @@ target_sources(vaultium_core
         core/backup_manager.cpp
         core/inventory.cpp
         core/scheduler.cpp
-
         remote/ssh_client.cpp
         remote/remote_client.cpp
         remote/remote_provisioner.cpp
         remote/ssh_command_runner.cpp
-
         agent/agent_app.cpp
-
-        PUBLIC
+    PUBLIC
         FILE_SET cxx_modules TYPE CXX_MODULES FILES
         core/types.cppm
         core/logger.cppm
@@ -82,76 +95,48 @@ target_sources(vaultium_core
         core/inventory.cppm
         core/scheduler.cppm
         core/core.cppm
-
         remote/ssh_client.cppm
         remote/remote_client.cppm
         remote/remote_provisioner.cppm
         remote/ssh_command_runner.cppm
-
         agent/agent_app.cppm
 )
 
 target_compile_features(vaultium_core PUBLIC cxx_std_23)
 target_compile_definitions(vaultium_core PUBLIC ${VAULTIUM_PLATFORM_DEFINE})
 target_link_libraries(vaultium_core PUBLIC PkgConfig::LIBSSH2)
-target_compile_options(vaultium_core PRIVATE -Wall -Wextra -Wpedantic)
+vaultium_enable_warnings(vaultium_core)
 
-# ---------------------------------------------------------------------------
-# vaultium: command-line front end.
-# ---------------------------------------------------------------------------
 add_executable(vaultium main.cpp)
-
 target_sources(vaultium
-        PRIVATE
+    PRIVATE
         cli/cli_app.cpp
-
-        PRIVATE
+    PRIVATE
         FILE_SET cxx_modules TYPE CXX_MODULES FILES
         cli/cli_app.cppm
 )
-
 target_link_libraries(vaultium PRIVATE vaultium_core)
-target_compile_options(vaultium PRIVATE -Wall -Wextra -Wpedantic)
+vaultium_enable_warnings(vaultium)
 
-# ---------------------------------------------------------------------------
-# Tests.
-# ---------------------------------------------------------------------------
 if(VAULTIUM_BUILD_TESTS)
-    enable_testing()
-
-    add_executable(vaultium_tests
-            tests/test_main.cpp
-    )
-
+    include(CTest)
+    add_executable(vaultium_tests tests/test_main.cpp)
     target_link_libraries(vaultium_tests PRIVATE vaultium_core)
-    target_compile_options(vaultium_tests PRIVATE -Wall -Wextra -Wpedantic)
-
+    vaultium_enable_warnings(vaultium_tests)
     add_test(NAME vaultium_tests COMMAND vaultium_tests)
 endif()
 
-# ---------------------------------------------------------------------------
-# vaultium_gui: optional Qt/QML front end. OFF by default so the CLI and core
-# build fully headless without any Qt dependency. The GUI links the same
-# vaultium_core library and consumes the source-based engine through a thin
-# C++ view-model bridge (BackupController, BackupJobsModel).
-# ---------------------------------------------------------------------------
 if(VAULTIUM_BUILD_GUI)
-    find_package(Qt6 REQUIRED COMPONENTS Quick Gui QuickControls2)
+    find_package(Qt6 6.5 REQUIRED COMPONENTS Quick Gui QuickControls2)
     qt_standard_project_setup(REQUIRES 6.5)
 
-    qt_add_executable(vaultium_gui
-            gui/main.cpp
-    )
-
-    # Theme is a QML singleton (global design tokens).
+    qt_add_executable(vaultium_gui gui/main.cpp)
     set_source_files_properties(gui/qml/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 
-    # NOTE: the URI must not collide (case-insensitively, for macOS APFS) with the
-    # "vaultium" executable name, or the generated module directory clobbers it.
     qt_add_qml_module(vaultium_gui
-            URI VaultiumUI
-            VERSION 1.0
-            QML_FILES
+        URI VaultiumUI
+        VERSION 1.0
+        QML_FILES
             gui/qml/Theme.qml
             gui/qml/AppIcon.qml
             gui/qml/Card.qml
@@ -182,7 +167,7 @@ if(VAULTIUM_BUILD_GUI)
             gui/qml/BackupHistoryScreen.qml
             gui/qml/RestoreVerifyScreen.qml
             gui/qml/SettingsScreen.qml
-            SOURCES
+        SOURCES
             gui/app_state.h
             gui/app_state.cpp
             gui/backup_controller.h
@@ -199,8 +184,14 @@ if(VAULTIUM_BUILD_GUI)
 
     target_include_directories(vaultium_gui PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/gui)
     target_link_libraries(vaultium_gui PRIVATE vaultium_core Qt6::Quick Qt6::QuickControls2)
-
-    # Qt disables C++20 module scanning on its targets by default; the bridge
-    # sources import vaultium_core, so re-enable scanning for this target.
     set_target_properties(vaultium_gui PROPERTIES CXX_SCAN_FOR_MODULES ON)
+    vaultium_enable_warnings(vaultium_gui)
+
+    install(TARGETS vaultium_gui
+        BUNDLE DESTINATION .
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    )
 endif()
+
+install(TARGETS vaultium RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(FILES README.md LICENSE DESTINATION ${CMAKE_INSTALL_DOCDIR})
