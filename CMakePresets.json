@@ -1,0 +1,51 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 28,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "release",
+      "displayName": "Release CLI + tests",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "VAULTIUM_BUILD_GUI": "OFF",
+        "VAULTIUM_BUILD_TESTS": "ON"
+      }
+    },
+    {
+      "name": "release-gui",
+      "displayName": "Release CLI + Qt GUI",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/release-gui",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "VAULTIUM_BUILD_GUI": "ON",
+        "VAULTIUM_BUILD_TESTS": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "release",
+      "configurePreset": "release"
+    },
+    {
+      "name": "release-gui",
+      "configurePreset": "release-gui"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "release",
+      "configurePreset": "release",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ]
+}
