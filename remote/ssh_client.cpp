@@ -217,7 +217,6 @@ extern "C" void keyboardInteractiveCallback(
 class SftpSession final {
 public:
     SftpSession(LIBSSH2_SESSION* session, int socketFd, Deadline deadline)
-        : m_session { session }
     {
         while ((m_sftp = libssh2_sftp_init(session)) == nullptr) {
             if (libssh2_session_last_errno(session) != LIBSSH2_ERROR_EAGAIN) {
@@ -234,7 +233,6 @@ public:
     }
     [[nodiscard]] auto get() const -> LIBSSH2_SFTP* { return m_sftp; }
 private:
-    LIBSSH2_SESSION* m_session {};
     LIBSSH2_SFTP* m_sftp {};
 };
 
@@ -511,7 +509,7 @@ auto SshClient::downloadFile(
                 output.write(buffer.data(), count);
                 if (!output) throw std::runtime_error("Local write failed: " + localPath.string());
                 received += static_cast<unsigned long long>(count);
-                deadline = makeDeadline(m_config.commandTimeout); // inactivity timeout
+                deadline = makeDeadline(m_config.commandTimeout);
                 if (received - lastEmit >= 262144) {
                     emitProgress(received, total);
                     lastEmit = received;
