@@ -1,6 +1,7 @@
 module;
 
 #include <cerrno>
+#include <csignal>
 #include <cstdlib>
 #include <filesystem>
 #include <stdexcept>
