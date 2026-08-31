@@ -1,0 +1,17 @@
+# Vaultium SQLite backup example
+BACKUP_ENABLED=true
+BACKUP_SOURCE=database
+BACKUP_ENGINE=sqlite
+EXECUTION_MODE=local
+SQLITE_FILES=/srv/app/data/app.sqlite
+SQLITE3_PATH=/usr/bin/sqlite3
+BACKUP_COMPRESS=true
+BACKUP_VALIDATE_GZIP=true
+BACKUP_CHECKSUM=true
+BACKUP_CLEANUP_ENABLED=true
+BACKUP_DIR=/var/backups/vaultium
+LOCK_FILE=/run/vaultium.lock
+BACKUP_RETENTION_DAYS=14
+BACKUP_INTERVAL_MINUTES=1440
+TAR_PATH=/usr/bin/tar
+GZIP_PATH=/usr/bin/gzip

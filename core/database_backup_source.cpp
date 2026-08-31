@@ -1,6 +1,5 @@
 module;
 
-#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <memory>
@@ -25,15 +24,49 @@ namespace {
     switch (type) {
     case BackupEngineType::MySql:
         return std::make_unique<MySqlBackupEngine>();
-
     case BackupEngineType::PostgreSql:
         return std::make_unique<PostgreSqlBackupEngine>();
-
     case BackupEngineType::Sqlite:
         return std::make_unique<SqliteBackupEngine>();
     }
-
     throw std::runtime_error("Unsupported backup engine.");
+}
+
+[[nodiscard]] auto readFirstLine(const std::filesystem::path& path) -> std::string
+{
+    std::ifstream file { path };
+    if (!file) {
+        throw std::runtime_error("Could not read file: " + path.string());
+    }
+
+    std::string line;
+    std::getline(file, line);
+    if (line.empty()) {
+        throw std::runtime_error("Credential file is empty: " + path.string());
+    }
+    return line;
+}
+
+[[nodiscard]] auto displayCommand(
+    bool compressed,
+    const std::string& gzipPath,
+    const std::filesystem::path& archive,
+    const std::string& client,
+    const std::vector<std::string>& args
+) -> std::string
+{
+    std::string rendered;
+    if (compressed) {
+        rendered += gzipPath + " -dc " + archive.string() + " | ";
+    }
+    rendered += client;
+    for (const auto& arg : args) {
+        rendered += " " + arg;
+    }
+    if (!compressed) {
+        rendered += " < " + archive.string();
+    }
+    return rendered;
 }
 
 } // namespace
@@ -52,19 +85,14 @@ auto DatabaseBackupSource::artifactPrefix(const BackupConfig& config) const -> s
 {
     switch (config.engineType) {
     case BackupEngineType::MySql:
-        return config.databaseMode == DatabaseMode::All
-            ? "mysql_full_"
-            : "mysql_selected_";
-
+        return config.databaseMode == DatabaseMode::All ? "mysql_full_" : "mysql_selected_";
     case BackupEngineType::PostgreSql:
         return config.databaseMode == DatabaseMode::All
             ? "postgresql_full_"
             : "postgresql_" + config.databases.front() + "_";
-
     case BackupEngineType::Sqlite:
         return "sqlite_files_";
     }
-
     return "database_";
 }
 
@@ -73,7 +101,6 @@ auto DatabaseBackupSource::artifactExtension(const BackupConfig& config) const -
     if (config.engineType == BackupEngineType::Sqlite) {
         return config.compress ? ".tar.gz" : ".tar";
     }
-
     return config.compress ? ".sql.gz" : ".sql";
 }
 
@@ -86,52 +113,6 @@ auto DatabaseBackupSource::createBackup(
     return engine->createBackup(config, temporaryFile);
 }
 
-namespace {
-
-[[nodiscard]] auto readFirstLine(const std::filesystem::path& path) -> std::string
-{
-    std::ifstream file { path };
-
-    if (!file) {
-        throw std::runtime_error("Could not read file: " + path.string());
-    }
-
-    std::string line;
-    std::getline(file, line);
-    return line;
-}
-
-// Renders a representative shell command for the dry-run plan. This string is
-// for display only; actual execution always uses safe argv-based process calls.
-[[nodiscard]] auto displayCommand(
-    bool compressed,
-    const std::string& gzipPath,
-    const std::filesystem::path& archive,
-    const std::string& client,
-    const std::vector<std::string>& args
-) -> std::string
-{
-    std::string rendered;
-
-    if (compressed) {
-        rendered += gzipPath + " -dc " + archive.string() + " | ";
-    }
-
-    rendered += client;
-
-    for (const auto& arg : args) {
-        rendered += " " + arg;
-    }
-
-    if (!compressed) {
-        rendered += " < " + archive.string();
-    }
-
-    return rendered;
-}
-
-} // namespace
-
 auto DatabaseBackupSource::restore(
     const BackupConfig& config,
     const std::filesystem::path& archive,
@@ -143,16 +124,16 @@ auto DatabaseBackupSource::restore(
     }
 
     const bool compressed = archive.string().ends_with(".gz");
-
-    // overwrite is the explicit "yes, mutate the live target" confirmation.
-    // Without it (and without an explicit dry-run), we default to a dry run.
     const bool execute = options.overwrite;
 
-    const auto runClient = [&](const std::string& client, const std::vector<std::string>& args) {
+    const auto runClient = [&] (
+        const std::string& client,
+        const std::vector<std::string>& args,
+        const ProcessEnvironment& environment = ProcessEnvironment {}
+    ) {
         const auto result = compressed
-            ? runGunzipIntoProcess(config.gzipPath, client, args, archive)
-            : runProcessWithStdin(client, args, archive);
-
+            ? runGunzipIntoProcess(config.gzipPath, client, args, archive, environment)
+            : runProcessWithStdin(client, args, archive, environment);
         if (result.exitCode != 0) {
             throw std::runtime_error("Database restore failed with exit code: " + std::to_string(result.exitCode));
         }
@@ -160,9 +141,10 @@ auto DatabaseBackupSource::restore(
 
     switch (config.engineType) {
     case BackupEngineType::MySql: {
-        const std::vector<std::string> args {
-            "--defaults-extra-file=" + config.mysqlDefaultsFile.string()
-        };
+        std::vector<std::string> args;
+        if (!config.mysqlDefaultsFile.empty()) {
+            args.push_back("--defaults-extra-file=" + config.mysqlDefaultsFile.string());
+        }
 
         if (!execute) {
             Logger::info("Dry run (pass overwrite to apply). Would run:");
@@ -196,18 +178,10 @@ auto DatabaseBackupSource::restore(
         }
 
         Logger::warning("Destructive restore: importing dump into the live PostgreSQL server.");
-
-        const auto password = readFirstLine(config.postgresPasswordFile);
-        ::setenv("PGPASSWORD", password.c_str(), 1);
-
-        try {
-            runClient(config.psqlPath, args);
-        } catch (...) {
-            ::unsetenv("PGPASSWORD");
-            throw;
-        }
-
-        ::unsetenv("PGPASSWORD");
+        const ProcessEnvironment environment {
+            { "PGPASSWORD", readFirstLine(config.postgresPasswordFile) }
+        };
+        runClient(config.psqlPath, args, environment);
         Logger::success("PostgreSQL restore completed.");
         break;
     }
@@ -233,13 +207,10 @@ auto DatabaseBackupSource::restore(
 
         Logger::warning("Destructive restore: extracting SQLite files to " + options.destination.string());
         std::filesystem::create_directories(options.destination);
-
         const auto result = runProcessToFile(config.tarPath, args, "/dev/null");
-
         if (result.exitCode != 0) {
             throw std::runtime_error("SQLite restore failed with exit code: " + std::to_string(result.exitCode));
         }
-
         Logger::success("SQLite restore completed into " + options.destination.string());
         break;
     }
@@ -254,12 +225,9 @@ auto DatabaseBackupSource::verify(
     if (!std::filesystem::exists(archive) || std::filesystem::file_size(archive) == 0) {
         return false;
     }
-
-    // Compressed dumps end in .gz and can be structurally validated with gzip -t.
     if (archive.string().ends_with(".gz")) {
         return validateGzipFile(config.gzipPath, archive);
     }
-
     return true;
 }
 

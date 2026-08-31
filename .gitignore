@@ -1,56 +1,52 @@
-# Prerequisites
+# Dependency files
 *.d
 
-# Compiled Object files
+# Compiled objects and libraries
 *.slo
 *.lo
 *.o
 *.obj
-
-# Precompiled Headers
 *.gch
 *.pch
-
-# Compiled Dynamic libraries
 *.so
 *.dylib
 *.dll
-
-# Fortran module files
 *.mod
 *.smod
-
-# Compiled Static libraries
 *.lai
 *.la
 *.a
 *.lib
 
-# Executables
+# Executables and application bundles
 *.exe
 *.out
 *.app
 
-#Extra
+# IDE and OS metadata
 *.VC.db
 *.VC.VC.opendb
 .DS_Store
 Thumbs.db
-.vs
-.idea
-
-# Final Output
-build
-build-llvm
-build-llvm2
-examples
-build-ninja/
-build-gui/
-cmake-build-debug/
-cmake-build-release/
-third-party/
-dynamics/
+.vs/
+.idea/
+.vscode/
+.qtcreator/
 CMakeLists.txt.user
-.qtcreator
-.claude
+
+# Build trees
+/build/
+/build-*/
+/cmake-build-*/
+
+# Local tooling and scratch state
+/third-party/
+/dynamics/
+/.claude/
 TODO.txt
+
+# Runtime secrets and local configuration
+*.local.conf
+*.secret
+*.key
+*.pem

@@ -14,27 +14,19 @@ export namespace vaultium::remote {
 /**
  * @brief SSH connection configuration.
  */
-    struct SshConnectionConfig {
-        std::string host;
-        std::uint16_t port { 22 };
-        std::string username;
-
-        RemoteAuthMethod authMethod { RemoteAuthMethod::Key };
-
-        std::filesystem::path privateKeyPath;
-        std::string privateKeyPassphrase {};
-
-        std::string password {};
-
-        // Host-key verification. When knownHostsFile is empty it defaults to
-        // ~/.ssh/known_hosts. In strict mode an unknown or mismatched host key
-        // aborts the connection; otherwise an unknown key is accepted with a
-        // warning (a mismatch always aborts).
-        std::filesystem::path knownHostsFile {};
-        bool strictHostKey { true };
-
-        std::chrono::seconds connectTimeout { 15 };
-    };
+struct SshConnectionConfig {
+    std::string host;
+    std::uint16_t port { 22 };
+    std::string username;
+    RemoteAuthMethod authMethod { RemoteAuthMethod::Key };
+    std::filesystem::path privateKeyPath;
+    std::string privateKeyPassphrase {};
+    std::string password {};
+    std::filesystem::path knownHostsFile {};
+    bool strictHostKey { true };
+    std::chrono::seconds connectTimeout { 15 };
+    std::chrono::seconds commandTimeout { 600 };
+};
 
 /**
  * @brief Result of remote command execution.
@@ -50,42 +42,26 @@ struct SshCommandResult {
  */
 class SshClient final {
 public:
-    /**
-     * @brief Constructs SSH client.
-     *
-     * @param config SSH connection config.
-     */
     explicit SshClient(SshConnectionConfig config);
 
     SshClient(const SshClient&) = delete;
     auto operator=(const SshClient&) -> SshClient& = delete;
-
     SshClient(SshClient&&) = delete;
     auto operator=(SshClient&&) -> SshClient& = delete;
-
-    /**
-     * @brief Disconnects SSH session and releases libssh2 resources.
-     */
     ~SshClient();
 
     /**
-     * @brief Connects and authenticates using public key authentication.
+     * @brief Connects, verifies the host key, and authenticates.
      */
     auto connect() -> void;
 
     /**
-     * @brief Executes command on remote server.
-     *
-     * @param command Remote shell command.
-     * @return Command result.
+     * @brief Executes a remote command within commandTimeout.
      */
     [[nodiscard]] auto execute(const std::string& command) -> SshCommandResult;
 
     /**
-     * @brief Downloads remote file to local path using SFTP.
-     *
-     * @param remotePath Remote file path.
-     * @param localPath Local file path.
+     * @brief Downloads a remote file with an inactivity timeout.
      */
     auto downloadFile(
         const std::filesystem::path& remotePath,
@@ -93,11 +69,7 @@ public:
     ) -> void;
 
     /**
-     * @brief Uploads text content to a remote file using SFTP.
-     *
-     * @param remotePath Remote file path.
-     * @param content Text content.
-     * @param permissions File permissions.
+     * @brief Uploads text content with an inactivity timeout.
      */
     auto uploadTextFile(
         const std::filesystem::path& remotePath,
@@ -107,7 +79,6 @@ public:
 
 private:
     SshConnectionConfig m_config;
-
     int m_socket { -1 };
     void* m_session {};
     bool m_connected {};
